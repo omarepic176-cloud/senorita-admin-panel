@@ -1365,6 +1365,28 @@
                 const customerGovernment = order.customer?.government || order.government || 'غير متوفر';
                 const customerNotes = order.customer?.notes || order.notes || 'لا يوجد ملاحظات';
 
+                // الحصول على قيمة الشحن من Firebase
+                const shippingValue = order.shipping || 0;
+                
+                // حساب المجموع الفرعي (مجموع أسعار المنتجات قبل التخفيض)
+                let subtotal = 0;
+                if (order.items) {
+                    order.items.forEach(item => {
+                        // استخدام السعر الأصلي للمنتج إذا كان متوفراً، وإلا استخدام السعر الحالي
+                        const itemPrice = item.originalPrice || item.price;
+                        subtotal += itemPrice * item.quantity;
+                    });
+                }
+                
+                // حساب الخصم
+                const discount = order.discount || 0;
+                
+                // حساب المجموع بعد الخصم
+                const totalAfterDiscount = Math.max(0, subtotal - discount);
+                
+                // حساب المجموع النهائي (بعد الخصم + الشحن)
+                const finalTotal = totalAfterDiscount + shippingValue;
+
                 return `
                     <div class="order-card">
                         <div class="order-header">
@@ -1379,30 +1401,48 @@
                             </div>
                         </div>
                         <div class="order-products">
-                            ${order.items ? order.items.map(item => `
+                            ${order.items ? order.items.map(item => {
+                                const itemPrice = item.originalPrice || item.price;
+                                const itemTotal = itemPrice * item.quantity;
+                                const currentPrice = item.price;
+                                
+                                return `
                                 <div class="product-item">
                                     <img src="${item.image || 'https://via.placeholder.com/50'}" alt="${item.name}" class="product-item-img">
                                     <div class="product-item-details">
                                         <div class="product-item-name">${item.name}</div>
                                         ${item.size ? `<div class="product-item-size">المقاس: ${item.size}</div>` : ''}
                                         ${item.color ? `<div class="product-item-color">اللون: ${item.color}</div>` : ''}
-                                        <div class="product-item-price">${item.price} ج.م x ${item.quantity}</div>
+                                        <div class="product-item-price">
+                                            ${item.originalPrice && item.originalPrice > item.price ? 
+                                                `<span style="text-decoration: line-through; color: #999; margin-left: 5px;">${item.originalPrice} ج.م</span>` : ''}
+                                            ${currentPrice} ج.م x ${item.quantity}
+                                        </div>
                                     </div>
-                                    <div class="product-item-quantity">${item.quantity * item.price} ج.م</div>
+                                    <div class="product-item-quantity">${itemTotal} ج.م</div>
                                 </div>
-                            `).join('') : ''}
+                                `;
+                            }).join('') : ''}
                         </div>
                         <div class="order-summary">
                             <div>المجموع الفرعي:</div>
-                            <div>${order.total || 0} ج.م</div>
+                            <div>${subtotal} ج.م</div>
                         </div>
                         <div class="order-summary">
                             <div>الخصم:</div>
-                            <div>${order.discount || 0} ج.م</div>
+                            <div>${discount} ج.م</div>
                         </div>
                         <div class="order-summary">
-                            <div class="order-total">المجموع:</div>
-                            <div class="order-total">${order.finalTotal || 0} ج.م</div>
+                            <div>المجموع بعد الخصم:</div>
+                            <div>${totalAfterDiscount} ج.م</div>
+                        </div>
+                        <div class="order-summary">
+                            <div>الشحن:</div>
+                            <div>${shippingValue} ج.م</div>
+                        </div>
+                        <div class="order-summary">
+                            <div class="order-total">المجموع النهائي:</div>
+                            <div class="order-total">${finalTotal} ج.م</div>
                         </div>
                         <div class="order-status">
                             <div><span class="status-badge ${statusClass}">${statusText}</span></div>
@@ -1476,22 +1516,35 @@
                             <div class="detail-row">
                                 <div class="detail-label">المنتجات:</div>
                                 <div class="detail-value">
-                                    ${order.items ? order.items.map(item => `
-                                        <div>${item.name}${item.size ? ` - المقاس: ${item.size}` : ''}${item.color ? ` - اللون: ${item.color}` : ''} - ${item.quantity} x ${item.price} ج.م = ${item.quantity * item.price} ج.م</div>
-                                    `).join('') : 'غير متوفر'}
+                                    ${order.items ? order.items.map(item => {
+                                        const itemPrice = item.originalPrice || item.price;
+                                        const itemTotal = itemPrice * item.quantity;
+                                        
+                                        return `
+                                        <div>${item.name}${item.size ? ` - المقاس: ${item.size}` : ''}${item.color ? ` - اللون: ${item.color}` : ''} - ${item.quantity} x ${itemPrice} ج.م = ${itemTotal} ج.م</div>
+                                        `;
+                                    }).join('') : 'غير متوفر'}
                                 </div>
                             </div>
                             <div class="detail-row">
                                 <div class="detail-label">المجموع الفرعي:</div>
-                                <div class="detail-value">${order.total || 0} ج.م</div>
+                                <div class="detail-value">${subtotal} ج.م</div>
                             </div>
                             <div class="detail-row">
                                 <div class="detail-label">الخصم:</div>
-                                <div class="detail-value">${order.discount || 0} ج.م</div>
+                                <div class="detail-value">${discount} ج.م</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">المجموع بعد الخصم:</div>
+                                <div class="detail-value">${totalAfterDiscount} ج.م</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">الشحن:</div>
+                                <div class="detail-value">${shippingValue} ج.م</div>
                             </div>
                             <div class="detail-row">
                                 <div class="detail-label">المجموع النهائي:</div>
-                                <div class="detail-value">${order.finalTotal || 0} ج.م</div>
+                                <div class="detail-value">${finalTotal} ج.م</div>
                             </div>
                         </div>
                     </div>
