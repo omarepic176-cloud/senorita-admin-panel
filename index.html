@@ -164,6 +164,9 @@
         .review-details-toggle{background:none;border:none;color:var(--accent-color);cursor:pointer;font-size:0.9rem;margin-top:10px;display:flex;align-items:center;gap:5px;}
         .review-details-content{margin-top:15px;padding:15px;background-color:var(--light-gray);border-radius:8px;display:none;}
         .review-details-content.show{display:block;}
+        .customer-data-toggle{background:none;border:none;color:var(--accent-color);cursor:pointer;font-size:0.9rem;margin-top:10px;display:flex;align-items:center;gap:5px;}
+        .customer-data-content{margin-top:15px;padding:15px;background-color:var(--light-gray);border-radius:8px;display:none;}
+        .customer-data-content.show{display:block;}
         @media (max-width:768px){.form-row{flex-direction:column;gap:0;}
         .category-card{width:100%;}
         .products-grid{grid-template-columns:1fr;}
@@ -1360,6 +1363,7 @@
                 const customerAddress = order.customer?.address || order.address || 'غير متوفر';
                 const customerFloor = order.customer?.floor || order.floor || 'غير متوفر';
                 const customerGovernment = order.customer?.government || order.government || 'غير متوفر';
+                const customerNotes = order.customer?.notes || order.notes || 'لا يوجد ملاحظات';
 
                 return `
                     <div class="order-card">
@@ -1412,6 +1416,27 @@
                                 </select>
                             ` : ''}
                         </div>
+                        <button class="customer-data-toggle" data-order-id="${order.id}">
+                            <i class="fas fa-chevron-down"></i> بيانات العميل
+                        </button>
+                        <div class="customer-data-content" id="customer-data-${order.id}">
+                            <div class="detail-row">
+                                <div class="detail-label">اسم العميل:</div>
+                                <div class="detail-value">${customerName}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">رقم الهاتف:</div>
+                                <div class="detail-value">${customerPhone}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">رقم هاتف إضافي:</div>
+                                <div class="detail-value">${customerPhone2 || 'لا يوجد'}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">الملاحظات:</div>
+                                <div class="detail-value">${customerNotes}</div>
+                            </div>
+                        </div>
                         <button class="order-details-toggle" data-order-id="${order.id}">
                             <i class="fas fa-chevron-down"></i> عرض تفاصيل الطلب
                         </button>
@@ -1439,6 +1464,10 @@
                             <div class="detail-row">
                                 <div class="detail-label">المحافظة:</div>
                                 <div class="detail-value">${customerGovernment}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">الملاحظات:</div>
+                                <div class="detail-value">${customerNotes}</div>
                             </div>
                             <div class="detail-row">
                                 <div class="detail-label">الهاتف:</div>
@@ -1504,6 +1533,23 @@
                         detailsContent.classList.add('show');
                         icon.className = 'fas fa-chevron-up';
                         toggle.innerHTML = `<i class="fas fa-chevron-up"></i> إخفاء تفاصيل الطلب`;
+                    }
+                });
+            });
+
+            document.querySelectorAll('.customer-data-toggle').forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const orderId = toggle.dataset.orderId;
+                    const customerDataContent = document.getElementById(`customer-data-${orderId}`);
+                    const icon = toggle.querySelector('i');
+                    if (customerDataContent.classList.contains('show')) {
+                        customerDataContent.classList.remove('show');
+                        icon.className = 'fas fa-chevron-down';
+                        toggle.innerHTML = `<i class="fas fa-chevron-down"></i> بيانات العميل`;
+                    } else {
+                        customerDataContent.classList.add('show');
+                        icon.className = 'fas fa-chevron-up';
+                        toggle.innerHTML = `<i class="fas fa-chevron-up"></i> إخفاء بيانات العميل`;
                     }
                 });
             });
@@ -1708,21 +1754,33 @@
         }
 
         function updateAnalytics() {
+            // FIXED: Better handling of order totals with fallback options
             const deliveredOrders = orders.filter(order => order.status === 'delivered');
-            const totalRevenue = deliveredOrders.reduce((sum, order) => sum + (order.finalTotal || 0), 0);
+            
+            // Calculate total revenue with fallback for different field names
+            const totalRevenue = deliveredOrders.reduce((sum, order) => {
+                // Try different field names for total amount
+                const orderTotal = order.finalTotal || order.total || order.amount || 0;
+                return sum + orderTotal;
+            }, 0);
+            
             const totalOrdersCount = orders.length;
             const deliveredOrdersCount = deliveredOrders.length;
             const avgOrderValue = deliveredOrdersCount > 0 ? totalRevenue / deliveredOrdersCount : 0;
 
+            // Count unique customers by phone number
             const customerPhones = new Set();
             orders.forEach(order => {
                 if (order.customer && order.customer.phone) {
                     customerPhones.add(order.customer.phone);
+                } else if (order.phone) {
+                    customerPhones.add(order.phone);
                 }
             });
             const totalCustomers = customerPhones.size;
 
-            const conversionRate = totalOrdersCount > 0 ? Math.min(100, Math.round((totalOrdersCount / (totalCustomers * 3)) * 100)) : 0;
+            // Simple conversion rate calculation
+            const conversionRate = totalCustomers > 0 ? Math.min(100, Math.round((totalOrdersCount / (totalCustomers * 3)) * 100)) : 0;
 
             totalRevenueEl.textContent = `${totalRevenue.toFixed(2)} ج.م`;
             totalOrdersEl.textContent = totalOrdersCount;
@@ -1783,14 +1841,19 @@
         }
 
         function updateRevenueChart() {
+            // FIXED: Better handling of order totals with fallback options
             const deliveredOrders = orders.filter(order => order.status === 'delivered');
             const revenueByMonth = {};
+            
             deliveredOrders.forEach(order => {
                 if (order.createdAt) {
                     const date = new Date(order.createdAt);
                     const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
                     if (!revenueByMonth[monthYear]) revenueByMonth[monthYear] = 0;
-                    revenueByMonth[monthYear] += order.finalTotal || 0;
+                    
+                    // Try different field names for total amount
+                    const orderTotal = order.finalTotal || order.total || order.amount || 0;
+                    revenueByMonth[monthYear] += orderTotal;
                 }
             });
 
@@ -1832,19 +1895,31 @@
         }
 
         function updateTopProductsChart() {
+            // FIXED: Better handling of order totals and product matching
+            const deliveredOrders = orders.filter(order => order.status === 'delivered');
             const productSales = {};
-            orders.filter(order => order.status === 'delivered').forEach(order => {
+            
+            deliveredOrders.forEach(order => {
                 if (order.items) {
                     order.items.forEach(item => {
-                        if (!productSales[item.name]) productSales[item.name] = 0;
-                        productSales[item.name] += item.quantity;
+                        if (!productSales[item.name]) {
+                            productSales[item.name] = {
+                                quantity: 0,
+                                revenue: 0
+                            };
+                        }
+                        productSales[item.name].quantity += item.quantity;
+                        productSales[item.name].revenue += (item.price * item.quantity);
                     });
                 }
             });
 
-            const sortedProducts = Object.entries(productSales).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const sortedProducts = Object.entries(productSales)
+                .sort((a, b) => b[1].quantity - a[1].quantity)
+                .slice(0, 10);
+                
             const productNames = sortedProducts.map(item => item[0]);
-            const salesCounts = sortedProducts.map(item => item[1]);
+            const salesCounts = sortedProducts.map(item => item[1].quantity);
 
             const ctx = document.getElementById('topProductsChart').getContext('2d');
             if (topProductsChart) topProductsChart.destroy();
@@ -1874,13 +1949,22 @@
         }
 
         function updateCategoryChart() {
+            // FIXED: Better handling of category matching
+            const deliveredOrders = orders.filter(order => order.status === 'delivered');
             const categoryRevenue = {};
-            orders.filter(order => order.status === 'delivered').forEach(order => {
+            
+            deliveredOrders.forEach(order => {
                 if (order.items) {
                     order.items.forEach(item => {
+                        // Find the product to get its category
                         const product = products.find(p => p.name === item.name);
                         if (product) {
-                            const categoryName = product.category;
+                            const categoryName = product.category || 'غير مصنف';
+                            if (!categoryRevenue[categoryName]) categoryRevenue[categoryName] = 0;
+                            categoryRevenue[categoryName] += (item.price * item.quantity);
+                        } else {
+                            // If product not found, use a default category
+                            const categoryName = 'غير مصنف';
                             if (!categoryRevenue[categoryName]) categoryRevenue[categoryName] = 0;
                             categoryRevenue[categoryName] += (item.price * item.quantity);
                         }
