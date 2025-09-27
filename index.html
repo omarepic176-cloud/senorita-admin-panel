@@ -1384,8 +1384,8 @@
                 // حساب المجموع بعد الخصم
                 const totalAfterDiscount = Math.max(0, subtotal - discount);
                 
-                // حساب المجموع النهائي (بعد الخصم + الشحن)
-                const finalTotal = totalAfterDiscount + shippingValue;
+                // استخدام المجموع النهائي من Firebase إذا كان متوفراً
+                const finalTotal = order.total || order.finalTotal || order.amount || (totalAfterDiscount + shippingValue);
 
                 return `
                     <div class="order-card">
@@ -1813,7 +1813,7 @@
             // Calculate total revenue with fallback for different field names
             const totalRevenue = deliveredOrders.reduce((sum, order) => {
                 // Try different field names for total amount
-                const orderTotal = order.finalTotal || order.total || order.amount || 0;
+                const orderTotal = order.total || order.finalTotal || order.amount || 0;
                 return sum + orderTotal;
             }, 0);
             
@@ -1905,7 +1905,7 @@
                     if (!revenueByMonth[monthYear]) revenueByMonth[monthYear] = 0;
                     
                     // Try different field names for total amount
-                    const orderTotal = order.finalTotal || order.total || order.amount || 0;
+                    const orderTotal = order.total || order.finalTotal || order.amount || 0;
                     revenueByMonth[monthYear] += orderTotal;
                 }
             });
